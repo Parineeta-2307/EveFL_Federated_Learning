@@ -18,11 +18,12 @@ Every round, before any client trains anything:
        (see client.py).
     5. Aggregate according to that state:
          SECURE   -> plain FedAvg
-         CAUTION  -> FedAvg with anomaly-downweighting (an update whose
-                     L2 norm is an outlier gets its weight halved, not
-                     zeroed — one hospital legitimately having more
-                     signal shouldn't be punished the same as a
-                     genuinely poisoned update)
+         CAUTION  -> FedAvg with norm clipping (an update whose delta
+                     norm is an outlier is scaled down to the acceptance
+                     bound, not excluded — the hospital's data stays in
+                     the round, but a scaled/poisoned update can move
+                     the global model by at most that bound; see
+                     screening.py)
          LOCKDOWN -> discard the round entirely, keep the last known
                      good parameters, flag `rekey_recommended`.
 
@@ -55,7 +56,12 @@ from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import Strategy
 
-from evefl.fl.screening import flag_anomalous_updates, update_delta_norm
+from evefl.fl.screening import (
+    clip_update_to_norm,
+    flag_anomalous_updates,
+    screening_threshold,
+    update_delta_norm,
+)
 from evefl.orchestration.state_machine import SecurityState, StateController, StateThresholds
 from evefl.quantum.bb84 import BB84Protocol
 from evefl.quantum.base import QKDResult
@@ -262,13 +268,19 @@ class EveFLStrategy(Strategy):
             norms = [update_delta_norm(nd, self._round_global_ndarrays) for nd in client_ndarrays]
             round_log["update_delta_norms"] = dict(zip(cids, norms))
             flags = flag_anomalous_updates(norms, k=self._anomaly_k, rel_floor=self._anomaly_rel_floor)
-            for i, flagged in enumerate(flags):
-                if flagged:
-                    weights[i] *= 0.5  # downweight, don't zero — could be legitimate signal
-                    anomalous_cids.append(cids[i])
-            if anomalous_cids:
-                log.warning("[Round %d] CAUTION anomaly downweighted client(s): %s",
-                            server_round, anomalous_cids)
+            if any(flags):
+                bound = screening_threshold(norms, k=self._anomaly_k, rel_floor=self._anomaly_rel_floor)
+                round_log["clip_bound"] = bound
+                # Clip, don't exclude: the hospital stays in the round but a scaled
+                # update can move the global model by at most `bound`.
+                for i, flagged in enumerate(flags):
+                    if flagged:
+                        client_ndarrays[i] = clip_update_to_norm(
+                            client_ndarrays[i], self._round_global_ndarrays, norm=norms[i], bound=bound
+                        )
+                        anomalous_cids.append(cids[i])
+                log.warning("[Round %d] CAUTION anomaly: clipped update norm of client(s) %s to %.4f",
+                            server_round, anomalous_cids, bound)
 
         weights = weights / weights.sum()
 
@@ -283,7 +295,7 @@ class EveFLStrategy(Strategy):
         self._last_good_parameters = aggregated_parameters
 
         round_log.update({
-            "aggregation": "fedavg" if state == SecurityState.SECURE else "fedprox_anomaly_weighted",
+            "aggregation": "fedavg" if state == SecurityState.SECURE else "fedprox_norm_clipped",
             "anomalous_clients": anomalous_cids,
             "fedprox_active_clients": sum(
                 1 for _, fit_res in results if float(fit_res.metrics.get("fedprox_mu", 0.0)) > 0.0

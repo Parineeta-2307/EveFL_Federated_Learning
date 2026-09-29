@@ -26,6 +26,12 @@ huge outlier. So the spread is never allowed to fall below `rel_floor * median`:
 
 Only *large* updates are flagged (scaled / poisoned updates blow the norm up).
 With fewer than 3 updates a median is not meaningful, so nothing is flagged.
+
+Response: clip, don't exclude
+-----------------------------
+A flagged update is scaled down so its delta norm equals the acceptance
+threshold (`clip_update_to_norm`). The hospital's data stays in the round, but
+a scaled or poisoned update can move the global model by at most the bound.
 """
 
 from __future__ import annotations
@@ -64,6 +70,32 @@ def screening_threshold(norms: Sequence[float], *, k: float, rel_floor: float) -
     mad = float(np.median(np.abs(arr - median)))
     scale = max(MAD_TO_SIGMA * mad, rel_floor * median)
     return median + k * scale
+
+
+def clip_update_to_norm(
+    client_ndarrays: Sequence[np.ndarray],
+    global_ndarrays: Sequence[np.ndarray],
+    *,
+    norm: float,
+    bound: float,
+) -> List[np.ndarray]:
+    """Scale the update delta so its norm is at most `bound`.
+
+    Returns `global + delta * min(1, bound / norm)` for floating tensors; integer
+    tensors (counters) are returned unchanged. `norm` is the precomputed
+    `update_delta_norm` of this update.
+    """
+    if norm <= bound or norm == 0.0:
+        return [np.array(t, copy=True) for t in client_ndarrays]
+    scale = bound / norm
+    clipped: List[np.ndarray] = []
+    for client, global_ in zip(client_ndarrays, global_ndarrays):
+        if not np.issubdtype(client.dtype, np.floating):
+            clipped.append(np.array(client, copy=True))
+            continue
+        delta = client.astype(np.float64) - global_.astype(np.float64)
+        clipped.append((global_.astype(np.float64) + delta * scale).astype(client.dtype))
+    return clipped
 
 
 def flag_anomalous_updates(norms: Sequence[float], *, k: float = 3.0, rel_floor: float = 0.25) -> List[bool]:

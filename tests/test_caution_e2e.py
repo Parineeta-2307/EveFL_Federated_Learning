@@ -77,7 +77,7 @@ def test_caution_round_runs_fedprox_and_aggregates(monkeypatch, synthetic_data):
     assert log["state"] == "CAUTION"
     assert log["n_failures"] == 0 and log["n_results"] == 3
     assert log["fedprox_active_clients"] == 3
-    assert log["aggregation"] == "fedprox_anomaly_weighted"
+    assert log["aggregation"] == "fedprox_norm_clipped"
     changed = any(not np.allclose(a, b) for a, b in zip(parameters_to_ndarrays(init), parameters_to_ndarrays(final)))
     assert changed, "CAUTION round must produce an updated global model"
 

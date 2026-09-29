@@ -63,7 +63,7 @@ configure_fit()
 aggregate_fit()
 │
 ├─ SECURE  → weighted FedAvg
-├─ CAUTION → anomaly scoring + downweight suspicious gradients
+├─ CAUTION → update-delta-norm screening; outlier updates are clipped to the acceptance bound
 └─ LOCKDOWN → return last good model, trigger BB84 re-key
 ```
 

@@ -78,3 +78,9 @@ Fix in order. Each fix needs a test.
 - P2-8 Team metadata inconsistent across documents (guide name, one USN). Confirm and unify.
 - P2-9 FedAvg averages BatchNorm buffers including num_batches_tracked (int64 cast after
   float average). Handle explicitly.
+
+## Behaviour changes that affect the paper
+- CAUTION response to a flagged update is now norm CLIPPING (scaled to the acceptance bound), not
+  halving its weight. Flagged updates stay in the average. Paper Section on CAUTION aggregation must
+  be updated, and the guide informed. Screening rule: median + k*max(1.4826*MAD, rel_floor*median)
+  on update-delta norms, k=3, rel_floor=0.25 (evefl/fl/screening.py).

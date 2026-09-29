@@ -13,7 +13,12 @@ from flwr.common import Code, FitRes, Status, ndarrays_to_parameters, parameters
 from flwr.server.client_proxy import ClientProxy
 
 from evefl.fl import strategy as strategy_module
-from evefl.fl.screening import flag_anomalous_updates, screening_threshold, update_delta_norm
+from evefl.fl.screening import (
+    clip_update_to_norm,
+    flag_anomalous_updates,
+    screening_threshold,
+    update_delta_norm,
+)
 from evefl.fl.strategy import EveFLStrategy
 from evefl.quantum.base import QKDResult
 
@@ -172,10 +177,59 @@ def test_strategy_flags_nothing_for_two_near_identical_honest_plus_slightly_larg
     assert log["anomalous_clients"] == []
 
 
-def test_flagged_client_is_downweighted_in_aggregate(monkeypatch):
+def test_flagged_client_is_clipped_to_the_bound_not_excluded(monkeypatch):
     global_ = [np.zeros((4,), dtype=np.float32)]
     updates = [np.full(4, 0.01, np.float32), np.full(4, 0.0102, np.float32), np.full(4, 5.0, np.float32)]
     log, aggregated = _caution_round(monkeypatch, global_, updates)
     assert log["anomalous_clients"] == ["2"]
-    # equal example counts, outlier weight halved -> weights 0.4 / 0.4 / 0.2
-    assert aggregated[0] == pytest.approx(0.4 * 0.01 + 0.4 * 0.0102 + 0.2 * 5.0, rel=1e-4)
+    assert log["aggregation"] == "fedprox_norm_clipped"
+
+    # The outlier is still in the average (equal example counts -> weights 1/3 each), but
+    # its update was scaled down so its delta norm equals the bound.
+    bound = log["clip_bound"]
+    clipped_value = 5.0 * bound / log["update_delta_norms"]["2"]
+    assert aggregated[0] == pytest.approx((0.01 + 0.0102 + clipped_value) / 3, rel=1e-4)
+    assert aggregated[0] > (0.01 + 0.0102) / 3  # still contributes, not excluded
+    assert aggregated[0] < np.mean(updates, axis=0)[0]  # far less influence than unclipped FedAvg
+
+
+def test_clean_caution_round_is_plain_fedavg(monkeypatch):
+    global_ = [np.zeros((4,), dtype=np.float32)]
+    updates = [np.full(4, v, np.float32) for v in (0.010, 0.011, 0.012)]
+    log, aggregated = _caution_round(monkeypatch, global_, updates)
+    assert log["anomalous_clients"] == [] and "clip_bound" not in log
+    assert aggregated[0] == pytest.approx(0.011, rel=1e-4)
+
+
+# --------------------------------------------------------------------------
+# clip_update_to_norm
+# --------------------------------------------------------------------------
+
+def test_clip_scales_delta_to_the_bound():
+    global_ = [np.full((100,), 1000.0)]
+    client = [np.full((100,), 1000.0) + 1.0]  # delta norm = 10
+    clipped = clip_update_to_norm(client, global_, norm=10.0, bound=2.0)
+    assert update_delta_norm(clipped, global_) == pytest.approx(2.0)
+    assert np.all(clipped[0] > global_[0])  # direction preserved
+
+
+def test_clip_leaves_small_updates_untouched():
+    global_ = [np.zeros(4)]
+    client = [np.full(4, 0.1)]
+    clipped = clip_update_to_norm(client, global_, norm=0.2, bound=1.0)
+    np.testing.assert_array_equal(clipped[0], client[0])
+
+
+def test_clip_keeps_integer_tensors_and_dtype():
+    global_ = [np.zeros(4, np.float32), np.array(0, np.int64)]
+    client = [np.full(4, 5.0, np.float32), np.array(7, np.int64)]
+    clipped = clip_update_to_norm(client, global_, norm=10.0, bound=1.0)
+    assert clipped[0].dtype == np.float32
+    assert clipped[1] == 7 and clipped[1].dtype == np.int64
+
+
+def test_clip_does_not_mutate_input():
+    global_ = [np.zeros(4)]
+    client = [np.full(4, 5.0)]
+    clip_update_to_norm(client, global_, norm=10.0, bound=1.0)
+    np.testing.assert_array_equal(client[0], np.full(4, 5.0))

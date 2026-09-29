@@ -82,7 +82,7 @@ with col_policy:
         """)
     elif state == SecurityState.CAUTION:
         st.markdown("""
-        - **Aggregation:** FedAvg with gradient-norm anomaly downweighting
+        - **Aggregation:** FedAvg with update-norm screening (outlier updates clipped to the bound)
         - **Client loss:** BCEWithLogitsLoss + FedProx term
         - **Proximal μ:** 0.01
         - **Anomaly scoring:** Enabled (flag if ||W|| > mean + 2σ)
