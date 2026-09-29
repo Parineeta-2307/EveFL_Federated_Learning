@@ -231,6 +231,7 @@ class EveFLStrategy(Strategy):
         if state == SecurityState.LOCKDOWN:
             round_log.update({
                 "aggregation": "lockdown_discarded",
+                "model_updated": False,
                 "rekey_recommended": True,
             })
             self.round_logs.append(round_log)
@@ -239,7 +240,7 @@ class EveFLStrategy(Strategy):
             return self._last_good_parameters, round_log
 
         if not results:
-            round_log.update({"aggregation": "no_results", "rekey_recommended": False})
+            round_log.update({"aggregation": "no_results", "model_updated": False, "rekey_recommended": False})
             self.round_logs.append(round_log)
             return self._last_good_parameters, round_log
 
@@ -251,7 +252,7 @@ class EveFLStrategy(Strategy):
         if sum(num_examples) == 0:
             # Every client returned num_examples=0 (e.g. all skipped
             # training for some reason) — nothing usable to aggregate.
-            round_log.update({"aggregation": "no_examples", "rekey_recommended": False})
+            round_log.update({"aggregation": "no_examples", "model_updated": False, "rekey_recommended": False})
             self.round_logs.append(round_log)
             return self._last_good_parameters, round_log
 
@@ -284,6 +285,7 @@ class EveFLStrategy(Strategy):
 
         round_log.update({
             "aggregation": "fedavg" if state == SecurityState.SECURE else "fedprox_anomaly_weighted",
+            "model_updated": True,
             "anomalous_clients": anomalous_cids,
             "fedprox_active_clients": sum(
                 1 for _, fit_res in results if float(fit_res.metrics.get("fedprox_mu", 0.0)) > 0.0

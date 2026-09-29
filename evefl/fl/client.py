@@ -166,7 +166,10 @@ class EveFLClient(NumPyClient):
         self.lr = lr
         self.device = device or get_device()
 
-        self.model = build_resnet18(pretrained=True)
+        # Pretrained or not is decided ONCE, by the server's initial parameters; every round the
+        # server overwrites all client weights (incl. BatchNorm buffers) before local training, so
+        # the client's own init is irrelevant. Random init here avoids a per-client weight download.
+        self.model = build_resnet18(pretrained=False)
         self._train_loader = None  # lazy: built on first fit(), dataset load is not free
 
     def _get_train_loader(self):

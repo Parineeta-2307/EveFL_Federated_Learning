@@ -13,14 +13,14 @@ Fix in order. Each fix needs a test.
   (max z = (n-1)/sqrt(n) = 1.155). It also measures full-parameter norm, not update-delta norm
   (paper says gradient norm). Use delta norms with robust statistics (median and MAD) or a
   bound relative to the median.
-- P0-3 No evaluation. `evaluate_fn=None`, client `evaluate()` returns NaN. Add server-side
+- P0-3 [FIXED: structured per-round macro/per-class AUC in results JSON via the sequential runner, LOCKDOWN rounds included, skipped classes listed; tests/test_evaluation.py] No evaluation. `evaluate_fn=None`, client `evaluate()` returns NaN. Add server-side
   macro AUC-ROC on the held-out test split (skip classes with no positives), plus per-class AUC.
 - P0-4 evefl/fl/dataset.py `_dirichlet_partition`. A multi-label image is added to every client
   that receives any of its positive classes, so partitions overlap. Splitting is per image, but
   ChestX-ray14 has multiple images per patient, so patients leak across train, test and clients.
   Also the code (class-wise Dirichlet) differs from the paper's description (per-sample p~Dir).
   Split by Patient ID, make partitions disjoint, document the exact scheme, fix the paper text.
-- P0-5 Model init. `pretrained=False` on server and clients, but the paper says ImageNet
+- P0-5 [FIXED: pretrained is an explicit --pretrained/--no-pretrained flag, offline weights via --pretrained-weights (scripts/cache_pretrained_weights.py), recorded with SHA-256 in every results JSON; clients no longer download weights] Model init. `pretrained=False` on server and clients, but the paper says ImageNet
   pretrained. Decide, apply to both, and make weights available offline on Kaggle.
 - P0-6 [FIXED: _stable_seed uses SHA-256] evefl/fl/strategy.py seed uses builtin `hash(client.cid)`, which changes per process
   (PYTHONHASHSEED). Runs are not reproducible. Use `int(cid)` or zlib.crc32.

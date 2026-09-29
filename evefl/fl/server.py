@@ -46,6 +46,7 @@ diffing the output byte-for-byte.)
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import random
@@ -61,7 +62,7 @@ from flwr.common import ndarrays_to_parameters
 from evefl.fl.client import create_client_fn, get_model_parameters
 from evefl.fl.dataset import partition_and_save
 from evefl.fl.evaluation import make_evaluate_fn
-from evefl.fl.model import build_resnet18
+from evefl.fl.model import build_resnet18, describe_initialisation
 from evefl.fl.runner import build_local_client_proxies, run_sequential_fl
 from evefl.fl.strategy import EveFLStrategy
 from evefl.orchestration.state_machine import StateThresholds
@@ -114,8 +115,10 @@ ATTACK_SCHEDULES: Dict[str, Callable[[int], float]] = {
 # Building blocks
 # ============================================================================
 
-def build_initial_parameters():
-    model = build_resnet18(pretrained=True)
+def build_initial_parameters(pretrained: bool, pretrained_weights: Optional[Path] = None):
+    """Global model initialisation. `pretrained` is an explicit choice: a pretrained run and a
+    from-scratch run are not comparable, so it is recorded in every results file."""
+    model = build_resnet18(pretrained=pretrained, weights_path=pretrained_weights)
     return ndarrays_to_parameters(get_model_parameters(model))
 
 
@@ -158,6 +161,8 @@ def run_experiment(
     seed: int,
     experiment_name: str,
     output_path: Path,
+    pretrained: bool,
+    pretrained_weights: Optional[Path] = None,
     intercept_probability_schedule: Optional[Callable[[int], float]] = None,
     eval_every_n_rounds: int = 1,
     run_federated_evaluate: bool = True,
@@ -175,7 +180,8 @@ def run_experiment(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    initial_parameters = build_initial_parameters()
+    initial_parameters = build_initial_parameters(pretrained, pretrained_weights)
+    init_weights = describe_initialisation(pretrained, pretrained_weights)
 
     client_fn = create_client_fn(
         data_root, partition_root,
@@ -228,6 +234,7 @@ def run_experiment(
         elapsed_seconds=elapsed_seconds,
         round_logs=strategy.round_logs,
         n_failures=len(history.failures),
+        init_weights=init_weights,
     )
 
     with open(output_path, "w") as f:
@@ -254,21 +261,31 @@ def build_experiment_log(
     elapsed_seconds: float,
     round_logs: list,
     n_failures: int,
+    init_weights: Dict[str, Any],
 ) -> Dict[str, Any]:
     state_counts: Dict[str, int] = {}
     for r in round_logs:
         state_counts[r["state"]] = state_counts.get(r["state"], 0) + 1
 
+    config = {
+        "name": experiment_name,
+        "seed": seed,
+        "num_clients": num_clients,
+        "num_rounds": num_rounds,
+        "local_epochs": local_epochs,
+        "batch_size": batch_size,
+        "n_qubits": n_qubits,
+        "intercept_probability": intercept_probability,
+        "pretrained": init_weights["pretrained"],
+        "init_weights_sha256": init_weights["sha256"],
+    }
+    config_hash = hashlib.sha256(json.dumps(config, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
     return {
         "experiment": {
-            "name": experiment_name,
-            "seed": seed,
-            "num_clients": num_clients,
-            "num_rounds": num_rounds,
-            "local_epochs": local_epochs,
-            "batch_size": batch_size,
-            "n_qubits": n_qubits,
-            "intercept_probability": intercept_probability,
+            **config,
+            "config_hash": config_hash,
+            "init_weights": init_weights,
             "elapsed_seconds": elapsed_seconds,
             "execution_engine": "sequential (Ray-free)",
             "n_failures": n_failures,
@@ -297,6 +314,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
                     help="Fixed Eve intercept-resend probability. Ignored if --attack-schedule is set.")
     p.add_argument("--attack-schedule", type=str, default=None, choices=list(ATTACK_SCHEDULES.keys()),
                     help="Use a preset per-round schedule instead of a fixed intercept-probability.")
+    p.add_argument("--pretrained", action=argparse.BooleanOptionalAction, default=True,
+                    help="Initialise the global ResNet-18 from ImageNet weights (default, as in the paper). "
+                         "Use --no-pretrained for a from-scratch run; the choice is written into the results JSON.")
+    p.add_argument("--pretrained-weights", type=Path, default=None,
+                    help="Local ImageNet ResNet-18 state-dict file (for offline Kaggle notebooks; "
+                         "see scripts/cache_pretrained_weights.py). Without it, torchvision downloads the weights.")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--experiment-name", type=str, default="evefl_experiment")
     p.add_argument("--output", type=Path, default=Path("results/fl_training_log.json"))
@@ -345,6 +368,8 @@ def main(argv=None) -> None:
         seed=args.seed,
         experiment_name=args.experiment_name,
         output_path=args.output,
+        pretrained=args.pretrained,
+        pretrained_weights=args.pretrained_weights,
         eval_every_n_rounds=args.eval_every_n_rounds,
         run_federated_evaluate=not args.no_federated_evaluate,
     )
