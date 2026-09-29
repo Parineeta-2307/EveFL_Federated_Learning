@@ -9,16 +9,13 @@ here and CAUTION rounds returned no aggregate.
 """
 
 import numpy as np
-import pandas as pd
 import pytest
 from flwr.common import ndarrays_to_parameters, parameters_to_ndarrays
-from PIL import Image
 
 from evefl.fl import client as client_module
 from evefl.fl import strategy as strategy_module
 from evefl.fl.client import create_client_fn, get_model_parameters
-from evefl.fl.dataset import partition_and_save
-from evefl.fl.model import CHESTXRAY_LABELS, build_resnet18
+from evefl.fl.model import build_resnet18
 from evefl.fl.runner import build_local_client_proxies, run_sequential_fl
 from evefl.fl.strategy import EveFLStrategy
 from evefl.quantum.base import QKDResult
@@ -36,22 +33,6 @@ class _FixedQberProtocol:
         return QKDResult(sifted_key=[], qber=type(self).qber, n_qubits_sent=n_qubits, n_sifted=0,
                          intercept_probability=intercept_probability,
                          eavesdropper_active=intercept_probability > 0)
-
-
-@pytest.fixture
-def synthetic_data(tmp_path):
-    rng = np.random.default_rng(0)
-    data_root, partition_root = tmp_path / "data", tmp_path / "partitions"
-    (data_root / "images").mkdir(parents=True)
-    rows = []
-    for i in range(36):
-        name = f"synthetic_{i:04d}.png"
-        Image.fromarray(rng.integers(0, 256, (64, 64), dtype=np.uint8), mode="L").save(data_root / "images" / name)
-        labels = "|".join(rng.choice(CHESTXRAY_LABELS, size=rng.integers(1, 3), replace=False))
-        rows.append({"Image Index": name, "Finding Labels": labels})
-    pd.DataFrame(rows).to_csv(data_root / "Data_Entry_2017.csv", index=False)
-    partition_and_save(data_root, partition_root, n_clients=3, alpha=0.5, seed=0)
-    return data_root, partition_root
 
 
 def _run(monkeypatch, synthetic_data, qber, rounds=1):
