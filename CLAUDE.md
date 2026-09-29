@@ -60,6 +60,7 @@ streamlit run dashboard/app.py
 - CPU-only torch 2.5.1. tenseal installs fine. `circom`/`snarkjs` are NOT installed, so `zk` tests auto-skip
   (markers `ckks`, `zk` in `tests/conftest.py`). Run the full suite on Kaggle/WSL.
 - Baseline (2026-09-29, before any fixes): 22 passed, 6 errors (Groth16, no circom/snarkjs). With markers: 22 passed, 6 skipped.
+- CI: `.github/workflows/ci.yml` runs two jobs on Linux with `--require-optional-tools` (skips become failures): tests, and Groth16 (circom@0.5.46 + snarkjs@0.4.27). Check runs via the public API (no `gh`).
 - No `gh` CLI. Workflow: one branch per task, push to `parineeta`, open the PR on GitHub web. Tooling/CI PR comes after the P0 fixes.
 
 ## Gotchas
