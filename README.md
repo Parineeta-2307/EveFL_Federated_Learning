@@ -102,7 +102,7 @@ pip install -e .
 Uncomment the Phase 4+ dependencies in `requirements.txt` before running FL:
 
 ```
-flwr==1.11.1
+flwr==1.13.0
 torch==2.5.1
 torchvision==0.20.1
 ```
