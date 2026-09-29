@@ -54,6 +54,14 @@ streamlit run dashboard/app.py
 ```
 `results/`, `data/`, `*.png`, checkpoints are gitignored. Never commit datasets or keys.
 
+## Local environment (this Windows machine)
+- `.venv` in the repo is a junction to `C:\Users\Parin\evefl-env\venv` (C: has the space). pip cache and temp live in
+  `C:\Users\Parin\evefl-env\`. Use `.venv\Scripts\python.exe`; set `PIP_CACHE_DIR`/`TMP` there when installing.
+- CPU-only torch 2.5.1. tenseal installs fine. `circom`/`snarkjs` are NOT installed, so `zk` tests auto-skip
+  (markers `ckks`, `zk` in `tests/conftest.py`). Run the full suite on Kaggle/WSL.
+- Baseline (2026-09-29, before any fixes): 22 passed, 6 errors (Groth16, no circom/snarkjs). With markers: 22 passed, 6 skipped.
+- No `gh` CLI. Workflow: one branch per task, push to `parineeta`, open the PR on GitHub web. Tooling/CI PR comes after the P0 fixes.
+
 ## Gotchas
 - Do not use `fl.simulation.start_simulation` (Ray deadlocks against the CUDA context on Kaggle).
   Use the sequential driver in `evefl/fl/runner.py`.
