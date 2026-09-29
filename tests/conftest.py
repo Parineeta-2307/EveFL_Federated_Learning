@@ -9,6 +9,9 @@ plain `pytest` stays green locally while Kaggle / WSL / CI run the full suite.
     ckks  -> needs the `tenseal` package
     zk    -> needs `circom` and `snarkjs` on PATH
 
+CI runs with `--require-optional-tools`, which turns those skips into FAILURES, so a
+green CI run really did execute every test.
+
 Select or exclude explicitly with e.g. `pytest -m "not zk"`.
 """
 
@@ -43,15 +46,36 @@ def _missing_reason(marker: str) -> str | None:
     return None
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--require-optional-tools",
+        action="store_true",
+        default=False,
+        help="Fail (instead of skip) ckks/zk tests when tenseal / circom / snarkjs are missing.",
+    )
+
+
 def pytest_collection_modifyitems(config, items):
+    strict = config.getoption("--require-optional-tools")
     for item in items:
         marker = _MODULE_MARKERS.get(item.module.__name__.rsplit(".", 1)[-1])
         if marker is None:
             continue
         item.add_marker(getattr(pytest.mark, marker))
         reason = _missing_reason(marker)
-        if reason:
+        if not reason:
+            continue
+        if strict:
+            item.stash_missing_tool = reason  # picked up by the autouse fixture below
+        else:
             item.add_marker(pytest.mark.skip(reason=reason))
+
+
+@pytest.fixture(autouse=True)
+def _fail_if_required_tool_missing(request):
+    reason = getattr(request.node, "stash_missing_tool", None)
+    if reason:
+        pytest.fail(f"required optional tool missing (--require-optional-tools): {reason}", pytrace=False)
 
 
 @pytest.fixture
