@@ -284,6 +284,9 @@ class EveFLStrategy(Strategy):
         round_log.update({
             "aggregation": "fedavg" if state == SecurityState.SECURE else "fedprox_anomaly_weighted",
             "anomalous_clients": anomalous_cids,
+            "fedprox_active_clients": sum(
+                1 for _, fit_res in results if float(fit_res.metrics.get("fedprox_mu", 0.0)) > 0.0
+            ),
             "rekey_recommended": False,
         })
         self.round_logs.append(round_log)
