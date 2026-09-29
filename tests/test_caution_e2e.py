@@ -48,7 +48,7 @@ def synthetic_data(tmp_path):
         name = f"synthetic_{i:04d}.png"
         Image.fromarray(rng.integers(0, 256, (64, 64), dtype=np.uint8), mode="L").save(data_root / "images" / name)
         labels = "|".join(rng.choice(CHESTXRAY_LABELS, size=rng.integers(1, 3), replace=False))
-        rows.append({"Image Index": name, "Finding Labels": labels})
+        rows.append({"Image Index": name, "Finding Labels": labels, "Patient ID": i // 3})  # 12 patients x 3 images
     pd.DataFrame(rows).to_csv(data_root / "Data_Entry_2017.csv", index=False)
     partition_and_save(data_root, partition_root, n_clients=3, alpha=0.5, seed=0)
     return data_root, partition_root
