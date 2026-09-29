@@ -4,12 +4,12 @@ Priority. P0 blocks correct results. P1 blocks a defensible paper. P2 blocks pro
 Fix in order. Each fix needs a test.
 
 ## P0 (correctness)
-- P0-1 evefl/fl/client.py `calculate_fedprox_term`. Zips `model.parameters()` (62 tensors) with a
+- P0-1 [FIXED, tests in tests/test_fedprox.py + tests/test_caution_e2e.py] evefl/fl/client.py `calculate_fedprox_term`. Zips `model.parameters()` (62 tensors) with a
   list built from `state_dict()` (122 tensors, includes BatchNorm buffers) -> ValueError in
   CAUTION. Clients fail, strategy gets no results, `aggregate_fit` returns None, so CAUTION rounds
   are silent no-ops. smoke_test never exercises CAUTION. Fix by mapping global tensors by parameter
   name, add a unit test, and add a smoke run at alpha=0.3 that asserts `fedprox_active == 1`.
-- P0-2 evefl/fl/strategy.py `_caution_aggregate`. With N=3, mean+2*std can never be exceeded
+- P0-2 [FIXED: evefl/fl/screening.py, median + floored MAD on delta norms, tests/test_screening.py] evefl/fl/strategy.py `_caution_aggregate`. With N=3, mean+2*std can never be exceeded
   (max z = (n-1)/sqrt(n) = 1.155). It also measures full-parameter norm, not update-delta norm
   (paper says gradient norm). Use delta norms with robust statistics (median and MAD) or a
   bound relative to the median.
@@ -22,11 +22,11 @@ Fix in order. Each fix needs a test.
   Split by Patient ID, make partitions disjoint, document the exact scheme, fix the paper text.
 - P0-5 Model init. `pretrained=False` on server and clients, but the paper says ImageNet
   pretrained. Decide, apply to both, and make weights available offline on Kaggle.
-- P0-6 evefl/fl/strategy.py seed uses builtin `hash(client.cid)`, which changes per process
+- P0-6 [FIXED: _stable_seed uses SHA-256] evefl/fl/strategy.py seed uses builtin `hash(client.cid)`, which changes per process
   (PYTHONHASHSEED). Runs are not reproducible. Use `int(cid)` or zlib.crc32.
 - P0-7 `local_epochs` hardcoded to 5 in `configure_fit`, config ignored. Also `set_global_seed`
   CUDA init deadlock on Kaggle (see CLAUDE.md gotchas).
-- P0-8 evefl/fl/dataset.py `__getitem__` falls back to per-image `rglob`. Build a filename index
+- P0-8 [FIXED: shared per-root image index cache] evefl/fl/dataset.py `__getitem__` falls back to per-image `rglob`. Build a filename index
   once. The dataset also re-reads the CSV and rebuilds labels on every client instantiation.
 
 ## P1 (scientific validity)

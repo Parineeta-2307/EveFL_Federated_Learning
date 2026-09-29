@@ -55,6 +55,7 @@ from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import Strategy
 
+from evefl.fl.screening import flag_anomalous_updates, update_delta_norm
 from evefl.orchestration.state_machine import SecurityState, StateController, StateThresholds
 from evefl.quantum.bb84 import BB84Protocol
 from evefl.quantum.base import QKDResult
@@ -62,7 +63,8 @@ from evefl.quantum.base import QKDResult
 log = logging.getLogger(__name__)
 
 DEFAULT_CAUTION_FEDPROX_MU = 0.01
-DEFAULT_ANOMALY_K = 2.0  # flag an update if ||update|| > mean + k*std
+DEFAULT_ANOMALY_K = 3.0  # flag an update if its delta norm > median + k*max(1.4826*MAD, rel_floor*median)
+DEFAULT_ANOMALY_REL_FLOOR = 0.25  # spread floor, so near-identical honest clients don't make MAD ~ 0 (see screening.py)
 
 
 def _stable_seed(server_round: int, cid: str) -> int:
@@ -80,11 +82,6 @@ def _stable_seed(server_round: int, cid: str) -> int:
     return int(digest, 16) % 1_000_000
 
 
-def _flatten_norm(ndarrays: List[np.ndarray]) -> float:
-    """L2 norm of a client's update, flattened across all tensors."""
-    return float(np.sqrt(sum(np.sum(np.square(arr)) for arr in ndarrays)))
-
-
 class EveFLStrategy(Strategy):
     def __init__(
         self,
@@ -99,6 +96,7 @@ class EveFLStrategy(Strategy):
         min_available_clients: int = 3,
         caution_fedprox_mu: float = DEFAULT_CAUTION_FEDPROX_MU,
         anomaly_k: float = DEFAULT_ANOMALY_K,
+        anomaly_rel_floor: float = DEFAULT_ANOMALY_REL_FLOOR,
         evaluate_fn: Optional[Callable[[int, List[np.ndarray], dict],
                                         Optional[Tuple[float, Dict[str, Scalar]]]]] = None,
     ):
@@ -126,6 +124,7 @@ class EveFLStrategy(Strategy):
         self._min_available_clients = min_available_clients
         self._caution_fedprox_mu = caution_fedprox_mu
         self._anomaly_k = anomaly_k
+        self._anomaly_rel_floor = anomaly_rel_floor
         self._evaluate_fn = evaluate_fn
 
         # Last known good parameters — what LOCKDOWN rounds fall back to.
@@ -144,6 +143,8 @@ class EveFLStrategy(Strategy):
         self._round_system_qber: float = 0.0
         self._round_intercept_probability: float = 0.0
         self._round_qber_per_client: Dict[str, float] = {}
+        # Global weights sent to clients this round: the reference for update-delta norms.
+        self._round_global_ndarrays: List[np.ndarray] = []
 
     # ------------------------------------------------------------------
     # Strategy interface
@@ -156,6 +157,7 @@ class EveFLStrategy(Strategy):
         self, server_round: int, parameters: Parameters, client_manager: ClientManager
     ) -> List[Tuple[ClientProxy, FitIns]]:
         clients = self._sample_clients(client_manager)
+        self._round_global_ndarrays = parameters_to_ndarrays(parameters)
 
         # -- 1. Resolve this round's Eve intercept probability --------
         if self._intercept_probability_schedule is not None:
@@ -257,17 +259,16 @@ class EveFLStrategy(Strategy):
 
         anomalous_cids: List[str] = []
         if state == SecurityState.CAUTION:
-            norms = np.array([_flatten_norm(nd) for nd in client_ndarrays])
-            if len(norms) > 1 and norms.std() > 0:
-                mean, std = norms.mean(), norms.std()
-                threshold = mean + self._anomaly_k * std
-                for i, norm in enumerate(norms):
-                    if norm > threshold:
-                        weights[i] *= 0.5  # downweight, don't zero — could be legitimate signal
-                        anomalous_cids.append(cids[i])
-                if anomalous_cids:
-                    log.warning("[Round %d] CAUTION anomaly downweighted client(s): %s",
-                                server_round, anomalous_cids)
+            norms = [update_delta_norm(nd, self._round_global_ndarrays) for nd in client_ndarrays]
+            round_log["update_delta_norms"] = dict(zip(cids, norms))
+            flags = flag_anomalous_updates(norms, k=self._anomaly_k, rel_floor=self._anomaly_rel_floor)
+            for i, flagged in enumerate(flags):
+                if flagged:
+                    weights[i] *= 0.5  # downweight, don't zero — could be legitimate signal
+                    anomalous_cids.append(cids[i])
+            if anomalous_cids:
+                log.warning("[Round %d] CAUTION anomaly downweighted client(s): %s",
+                            server_round, anomalous_cids)
 
         weights = weights / weights.sum()
 
