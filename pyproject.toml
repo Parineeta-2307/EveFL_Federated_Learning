@@ -14,3 +14,7 @@ include = ["evefl*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "ckks: needs the tenseal package (auto-skipped if missing)",
+    "zk: needs circom and snarkjs on PATH (auto-skipped if missing)",
+]
