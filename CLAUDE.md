@@ -67,7 +67,7 @@ streamlit run dashboard/app.py
   Use the sequential driver in `evefl/fl/runner.py`.
 - Seed CUDA lazily; `set_global_seed` calling `torch.cuda` early caused a Kaggle deadlock.
 - Do not use builtin `hash()` for seeds (varies per process). Use a stable hash.
-- Pinned versions: flwr 1.13.0 (requirements.txt may lag), cryptography <43 for flwr, torch 2.5.1.
+- Pinned versions: flwr 1.13.0 (settled; 1.11.1 pinned numpy<2 and clashed with Kaggle), cryptography <43 for flwr, torch 2.5.1.
 - FedAvg over BatchNorm buffers (`num_batches_tracked`) needs explicit handling.
 - Split ChestX-ray14 by Patient ID, not image, to avoid leakage.
 
