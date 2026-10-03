@@ -1,0 +1,244 @@
+VERBATIM COPY of what the user pasted at the end of the previous chat (Kaggle notebook transcript, audit output,
+partition_meta.json, and the reviewer's advice). The previous chat did NOT act on it, by the user's explicit instruction.
+Dataset path on Kaggle: /kaggle/input/datasets/nih-chest-xrays/data   Kaggle Python 3.13.15, torch 2.11.0+cu128, torchvision 0.26.0+cu128
+
+=====================================================================================================================
+A. Notebook transcript
+=====================================================================================================================
+
+/kaggle/working/EveFL
+fix/p0-4-patient-level-split
+9873d10 (HEAD -> fix/p0-4-patient-level-split, origin/fix/p0-4-patient-level-split) Kaggle runbook and run-summary script for the partition audit and lite baseline
+eba53bd Validation split by patient (disjoint from hospitals and test); per-round val_eval for model selection
+01ad3ff Merge main into fix/p0-4-patient-level-split
+
+1344
+
+--- cell ---
+%cd /kaggle/working/EveFL
+!pip install -q -r requirements.txt
+
+/kaggle/working/EveFL
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.6/6.6 MB 52.9 MB/s eta 0:00:0000:0100:01
+  Installing build dependencies ... done
+  Getting requirements to build wheel ... done
+  Preparing metadata (pyproject.toml) ... done
+ERROR: Ignored the following yanked versions: 0.1.6, 0.1.7, 0.1.8, 0.1.9, 0.2.0, 0.2.1, 0.2.2, 0.2.2.post2, 0.2.2.post3
+ERROR: Could not find a version that satisfies the requirement torchvision==0.20.1 (from versions: 0.21.0, 0.22.0, 0.22.1, 0.23.0, 0.24.0, 0.24.1, 0.25.0, 0.26.0, 0.27.0, 0.27.1, 0.28.0, 0.29.0, 0.29.1)
+ERROR: No matching distribution found for torchvision==0.20.1
+
+--- cell ---
+%cd /kaggle/working/EveFL
+!pip install -q -e .
+
+/kaggle/working/EveFL
+  Installing build dependencies ... done
+  Checking if build backend supports build_editable ... done
+  Getting requirements to build editable ... done
+  Preparing editable metadata (pyproject.toml) ... done
+  Building editable for evefl (pyproject.toml) ... done
+
+--- cell ---
+import os
+os._exit(0)
+
+--- cell ---
+!pip install -q -e .
+
+ERROR: file:///kaggle/working does not appear to be a Python project: neither 'setup.py' nor 'pyproject.toml' found.
+
+--- cell ---
+import os
+os._exit(0)
+
+--- markdown ---
+it'll show the kernel has died-normal. run from the next cell.
+
+--- cell ---
+%cd /kaggle/working/EveFL
+!pip install -r requirements.txt 2>&1 | tail -n 40
+
+/kaggle/working/EveFL
+Collecting qiskit==1.2.4 (from -r requirements.txt (line 2))
+  Using cached qiskit-1.2.4-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (12 kB)
+Collecting qiskit-aer==0.15.1 (from -r requirements.txt (line 3))
+  Using cached qiskit-aer-0.15.1.tar.gz (6.6 MB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting cryptography<43.0.0,>=42.0.4 (from -r requirements.txt (line 7))
+  Using cached cryptography-42.0.8-cp39-abi3-manylinux_2_28_x86_64.whl.metadata (5.3 kB)
+Collecting PyYAML==6.0.2 (from -r requirements.txt (line 10))
+  Using cached PyYAML-6.0.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (2.1 kB)
+Collecting pytest==8.3.3 (from -r requirements.txt (line 13))
+  Using cached pytest-8.3.3-py3-none-any.whl.metadata (7.5 kB)
+Collecting flwr==1.13.0 (from -r requirements.txt (line 16))
+  Using cached flwr-1.13.0-py3-none-any.whl.metadata (15 kB)
+Collecting torch==2.5.1 (from -r requirements.txt (line 17))
+  Using cached torch-2.5.1-cp313-cp313-manylinux1_x86_64.whl.metadata (28 kB)
+ERROR: Ignored the following yanked versions: 0.1.6, 0.1.7, 0.1.8, 0.1.9, 0.2.0, 0.2.1, 0.2.2, 0.2.2.post2, 0.2.2.post3
+ERROR: Could not find a version that satisfies the requirement torchvision==0.20.1 (from versions: 0.21.0, 0.22.0, 0.22.1, 0.23.0, 0.24.0, 0.24.1, 0.25.0, 0.26.0, 0.27.0, 0.27.1, 0.28.0, 0.29.0, 0.29.1)
+ERROR: No matching distribution found for torchvision==0.20.1
+
+--- cell ---
+%cd /kaggle/working/EveFL
+import sys
+sys.path.insert(0, "/kaggle/working/EveFL")
+print(sys.version.split()[0])
+import torch, torchvision, pandas, numpy
+print("torch", torch.__version__, "| torchvision", torchvision.__version__)
+from evefl.fl.dataset import partition_and_save
+print("partition import OK")
+
+/kaggle/working/EveFL
+3.13.15
+torch 2.11.0+cu128 | torchvision 0.26.0+cu128
+partition import OK
+
+--- cell ---
+%cd /kaggle/working/EveFL
+import sys
+sys.path.insert(0, "/kaggle/working/EveFL")
+from pathlib import Path
+import pandas as pd
+KAGGLE_DATA = Path("/kaggle/input/datasets/nih-chest-xrays/data")
+PARTITION_ROOT = Path("/kaggle/working/partitions")
+csv = KAGGLE_DATA / "Data_Entry_2017.csv"
+print("CSV exists:", csv.exists())
+df = pd.read_csv(csv)
+print("rows:", len(df), "| patients:", df["Patient ID"].nunique())
+
+/kaggle/working/EveFL
+CSV exists: True
+rows: 112120 | patients: 30805
+
+--- cell ---
+from evefl.fl.dataset import partition_and_save
+partition_and_save(
+    data_root=KAGGLE_DATA, partition_root=PARTITION_ROOT,
+    n_clients=3, alpha=0.5, test_fraction=0.10,
+    seed=42, subset_fraction=1.0,
+)
+!ls /kaggle/working/partitions
+
+hospital_0  hospital_1	hospital_2  partition_meta.json  test  val
+
+--- cell ---
+!PYTHONPATH=/kaggle/working/EveFL python scripts/audit_partition.py --data-root /kaggle/input/datasets/nih-chest-xrays/data --partition-root /kaggle/working/partitions
+!cat /kaggle/working/partitions/partition_meta.json
+
+=== Overlap counts (must all be 0) ===
+  hospital_0~hospital_1    patients=0      images=0
+  hospital_0~hospital_2    patients=0      images=0
+  hospital_0~test          patients=0      images=0
+  hospital_0~val           patients=0      images=0
+  hospital_1~hospital_2    patients=0      images=0
+  hospital_1~test          patients=0      images=0
+  hospital_1~val           patients=0      images=0
+  hospital_2~test          patients=0      images=0
+  hospital_2~val           patients=0      images=0
+  test~val                 patients=0      images=0
+
+=== Per-split size ===
+  hospital_0  images=46975   patients=12869  no_finding_share=0.561
+  hospital_1  images=18018   patients=6470   no_finding_share=0.589
+  hospital_2  images=25136   patients=5306   no_finding_share=0.452
+  test        images=10889   patients=3080   no_finding_share=0.553
+  val         images=11102   patients=3080   no_finding_share=0.543
+
+=== Positive images per class ===
+  class                 hospital_0  hospital_1  hospital_2        test         val
+  Atelectasis                 4385        2155        2773        1171        1075
+  Cardiomegaly                1868          94         360         237         217
+  Effusion                    6133        1301        3434        1171        1278
+  Infiltration                8172        2922        5036        1845        1919
+  Mass                        1820        1009        1834         545         574
+  Nodule                      2339         913        1861         585         633
+  Pneumonia                    752         176         245         118         140
+  Pneumothorax                1850         730        1705         484         533
+  Consolidation               1975         462        1389         423         418
+  Edema                       1433         140         268         233         229
+  Emphysema                   1031         215         711         295         264
+  Fibrosis                     745          67         553         131         190
+  Pleural_Thickening          1109         287        1351         319         319
+  Hernia                         5          86          73          53          10
+
+RESULT: OK - disjoint at patient and image level
+
+--- partition_meta.json (as printed) ---
+{
+  "scheme": "patient_level_dirichlet_rarest_label",
+  "n_clients": 3,
+  "alpha": 0.5,
+  "seed": 42,
+  "test_fraction": 0.1,
+  "val_fraction": 0.1,
+  "n_patients_val": 3080,
+  "n_val": 11102,
+  "subset_fraction": 1.0,
+  "n_patients_total": 30805,
+  "n_patients_used": 30805,
+  "n_patients_test": 3080,
+  "n_patients_per_client": [12869, 6470, 5306],
+  "n_test": 10889,
+  "hospital_sizes": [46975, 18018, 25136],
+  "dominant_group_counts": {
+    "-1": 13109, "0": 1007, "1": 852, "2": 751, "3": 2298, "4": 843, "5": 1006, "6": 810,
+    "7": 576, "8": 564, "9": 515, "10": 717, "11": 772, "12": 717, "13": 108
+  },
+  "audit": {
+    "ok": true,
+    "overlaps": { ... all ten pairs: {"patients": 0, "images": 0} ... },
+    "stats": {
+      "hospital_0": {"images": 46975, "patients": 12869, "no_finding_share": 0.5606599254922832,
+        "positives_per_class": [4385, 1868, 6133, 8172, 1820, 2339, 752, 1850, 1975, 1433, 1031, 745, 1109, 5]},
+      "hospital_1": {"images": 18018, "patients": 6470, "no_finding_share": 0.5891885891885892,
+        "positives_per_class": [2155, 94, 1301, 2922, 1009, 913, 176, 730, 462, 140, 215, 67, 287, 86]},
+      "hospital_2": {"images": 25136, "patients": 5306, "no_finding_share": 0.45154360280076383,
+        "positives_per_class": [2773, 360, 3434, 5036, 1834, 1861, 245, 1705, 1389, 268, 711, 553, 1351, 73]},
+      "test": {"images": 10889, "patients": 3080, "no_finding_share": 0.553402516300854,
+        "positives_per_class": [1171, 237, 1171, 1845, 545, 585, 118, 484, 423, 233, 295, 131, 319, 53]},
+      "val": {"images": 11102, "patients": 3080, "no_finding_share": 0.5433255269320844,
+        "positives_per_class": [1075, 217, 1278, 1919, 574, 633, 140, 533, 418, 229, 264, 190, 319, 10]}
+    }
+  }
+}
+(The pasted JSON listed the ten overlap pairs one by one, all zeros; it is abbreviated here only to avoid repeating them.
+ Class order = CHESTXRAY_LABELS: Atelectasis, Cardiomegaly, Effusion, Infiltration, Mass, Nodule, Pneumonia, Pneumothorax,
+ Consolidation, Edema, Emphysema, Fibrosis, Pleural_Thickening, Hernia.)
+
+=====================================================================================================================
+B. The reviewer's advice (verbatim)
+=====================================================================================================================
+
+The audit passes, so you can merge the branch.
+Why I'm confident
+
+* No overlaps. All ten pairs show 0 patients and 0 images, and the script reports "disjoint at patient and image level".
+* Nothing lost or duplicated.
+   * Patients: 12,869 + 6,470 + 5,306 + 3,080 + 3,080 = 30,805, which matches the dataset.
+   * Images: 46,975 + 18,018 + 25,136 + 10,889 + 11,102 = 112,120, which also matches.
+   * Each class, summed over the five splits, matches the published NIH counts as far as I remember them (Atelectasis 11,559, Cardiomegaly 2,776, Hernia 227 and so on).
+* Realistic skew. The hospitals hold 42%, 16% and 22% of the images. Cardiomegaly has 1,868 positives in hospital 0 but 94 in hospital 1, and Hernia has 5 in hospital 0 but 86 in hospital 1. Test and validation each hold about 10% of the patients with a "No Finding" share close to the overall rate.
+
+Two things to know
+
+* Validation Hernia is thin. Validation has only 10 Hernia positives, so its per-class AUC is very noisy, and it feeds the macro AUC used for model selection. Decide the rule before any tuning runs, for example reporting macro AUC with and without Hernia on validation, or flagging classes with fewer than 20 positives. Test has 53 Hernia positives, which is acceptable for the final report.
+* Hospital 0 barely sees Hernia (5 positives). That is the non-IID effect you wanted, but mention it in the paper so nobody mistakes it for a bug.
+
+What to do now
+
+1. Paste the audit and JSON into Claude Code and tell it to merge `fix/p0-4-patient-level-split` into `main`, then check that CI is green on `main`.
+2. Ask it to save the result in the repo as `docs/validation/partition_audit_real.json`. It contains counts only, no patient IDs, so it's safe to commit. The Kaggle files vanish when the session ends.
+3. Ask it to confirm the partition is deterministic and to store a hash of the index files in the metadata. A rerun with seed 42 must give the same split, and the hash lets you prove it.
+4. Cite the audit in the paper next to `docs/paper_patches/partition_scheme.md`.
+
+Still blocked
+The lite baseline can't run until Claude Code writes the `requirements-kaggle.txt` for Python 3.13. Send it the prompt from my earlier message. After the merge, the Phase 2 plan can go ahead with the answers I gave.
+
+(Note from the writer of the handoff: "the prompt from my earlier message" is NOT in this repo or chat. The intent is item B in
+HANDOFF.md section 6. "The Phase 2 plan can go ahead" is already DONE and merged (Phase 2 = hysteresis, policy modes, per-client
+integration, sweep, ADR 0002); the next big item after the merge is Phase 4 key wiring, to be planned with the user first.)
