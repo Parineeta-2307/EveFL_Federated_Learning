@@ -1,0 +1,19 @@
+You are continuing a long-running engineering session on the EveFL project in E:\Coding\major_eve_final (a Windows machine).
+Do not rely on any memory of an earlier chat. Everything you need is in the repo:
+
+1. Read handoff/HANDOFF.md completely (working agreement, environment quirks, repo state, ordered task list).
+2. Read CLAUDE.md (team rules; they override defaults), then docs/04_KNOWN_ISSUES.md and docs/06_EXPERIMENT_PROTOCOL.md as needed.
+3. The user's pasted Kaggle audit and the reviewer's advice are in handoff/kaggle_audit_output.txt. The audit PASSED. I (the user) want YOU to
+   act on it now; the previous chat deliberately did not.
+
+Start with section 6 of HANDOFF.md, item A (merge fix/p0-4-patient-level-split into main after merging main into it and resolving the
+conflicts; save the audit as docs/validation/partition_audit_real.json; add the determinism test and index-file hashes; cite the audit in the
+paper patch; pre-register the rule for the thin validation classes). Then item B (requirements-kaggle.txt for Python 3.13 and a corrected
+Kaggle runbook so I can run the lite alpha=0 baseline), then C (mypy PR), then plan D (Phase 4 key wiring) with me before writing code.
+
+Rules I care about: push only to the `parineeta` remote, never `origin`; one branch per task; explicit `git add` paths (never `git add -A`; the
+handoff/ folder must not be committed unless I say so); merge to main only when CI is green; ask me before adding improvements or
+dependencies; pre-register selection rules in docs/06 before running sweeps; never claim something is implemented, secure or measured
+without code, a passing test and a result file; use "they/them" for people whose pronouns I have not stated.
+Before telling me anything is done, run `ruff check .` (without --fix), `mypy`, and the test suite, and report the counts.
+Begin by summarising back to me, in a few lines, the current state and the order you will work in, then go.
